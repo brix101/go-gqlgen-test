@@ -8,31 +8,30 @@ import (
 	"context"
 
 	"github.com/brix101/gqlgen-todos/graph/model"
-	"github.com/google/uuid"
 )
-
-var todoItems = []*model.Todo{}
 
 // CreateTodo is the resolver for the createTodo field.
 func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) (*model.Todo, error) {
-	newTodo := &model.Todo{
-		ID:   uuid.New().String(),
-		Text: input.Text,
-		Done: false,
-		User: &model.User{
-			ID:   input.UserID,
-			Name: "Placeholder User",
-		},
-	}
+	todo := r.TodoStore.Create(input)
 
-	todoItems = append(todoItems, newTodo)
-
-	return newTodo, nil
+	return todo, nil
 }
 
 // Todos is the resolver for the todos field.
 func (r *queryResolver) Todos(ctx context.Context) ([]*model.Todo, error) {
-	return todoItems, nil
+	return r.TodoStore.All(), nil
+}
+
+// TodoCreated is the resolver for the todoCreated field.
+func (r *subscriptionResolver) TodoCreated(ctx context.Context) (<-chan *model.Todo, error) {
+	ch, cleanup := r.TodoStore.Subscribe()
+
+	go func() {
+		<-ctx.Done()
+		cleanup()
+	}()
+
+	return ch, nil
 }
 
 // Mutation returns MutationResolver implementation.
@@ -41,7 +40,9 @@ func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-type (
-	mutationResolver struct{ *Resolver }
-	queryResolver    struct{ *Resolver }
-)
+// Subscription returns SubscriptionResolver implementation.
+func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionResolver{r} }
+
+type mutationResolver struct{ *Resolver }
+type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }
